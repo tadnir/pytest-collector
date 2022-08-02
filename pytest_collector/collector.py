@@ -1,7 +1,6 @@
 """Package for collecting pytest tests."""
-from typing import Any, Union
-import inspect
 
+import inspect
 import pytest
 
 
