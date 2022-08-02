@@ -16,6 +16,9 @@ def reindent(string: str) -> str:
     if not string:
         return string
 
+    # First remove any leading and trailing line drops...
+    string = string.strip('\n')
+
     # Calculate the leading spaces for the first line of the string.
     # ignore '\t' as it isn't common to indent with (and will mess the logic here).
     leading_spaces = len(string) - len(string.lstrip(' '))
@@ -41,7 +44,7 @@ class CollectorPlugin:
         self._modules = None
 
     @property
-    def modules(self) -> list[dict[str, Union[str, dict]]]:
+    def modules(self) -> list:
         """
         Get a list of the collected test modules.
 
@@ -62,7 +65,8 @@ class CollectorPlugin:
         # First we need to create the tests modules->suites->tests tree.
         modules = {}
         for test in session.items:
-            # For each test, traverse up the tree all the way to the root (modules), keeping track of the hierarchy.
+            # For each test, traverse up the tree all the way to the root (modules),
+            # keeping track of the hierarchy.
             test_module = self.get_test_module_tree(test)
             if test_module["name"] not in modules:
                 # If the module is new to us, just save it as a new module.
@@ -70,13 +74,14 @@ class CollectorPlugin:
             else:
                 # If the current module is already known,
                 # we need to merge the new (single) child into the existing module.
-                self.merge_child_to_parent(modules[test_module["name"]], list(test_module["children"].values())[0])
+                self.merge_child_to_parent(modules[test_module["name"]],
+                                           list(test_module["children"].values())[0])
 
         # Now that we have the tree figured out, we create a list of modules data.
         self._modules = [self.collect_data(module) for module in modules.values()]
 
     @staticmethod
-    def get_test_module_tree(test) -> dict[str, Union[str, Any, dict]]:
+    def get_test_module_tree(test) -> dict:
         """
         Traverses up the tests hierarchy tree to the modules (root), keeping track of the way up.
 
@@ -87,7 +92,11 @@ class CollectorPlugin:
         level = test.parent
         hierarchy = {"name": test.name, "obj": test}
         while level.parent is not None:
-            hierarchy = {"name": level.name, "obj": level, "children": {hierarchy["name"]: hierarchy}}
+            hierarchy = {
+                "name": level.name,
+                "obj": level,
+                "children": {hierarchy["name"]: hierarchy}
+            }
             level = level.parent
 
         return hierarchy
@@ -110,7 +119,7 @@ class CollectorPlugin:
             for grandchild in child["children"].values():
                 self.merge_child_to_parent(parent["children"][child["name"]], grandchild)
 
-    def collect_data(self, item: dict[str, Any]) -> dict[str, Union[str, list[dict[str, Any]]]]:
+    def collect_data(self, item: dict) -> dict:
         """
         Collects the following data about the given item:
          * type(str) - one of `Module`, `Class`, `Function`.
@@ -137,16 +146,18 @@ class CollectorPlugin:
         if type(item_obj).__name__ == "Function":
             item_data["src"] = reindent(inspect.getsource(item_obj.obj))
         else:
-            item_data["children"] = [self.collect_data(child) for child in item["children"].values()]
+            item_data["children"] = [self.collect_data(child)
+                                     for child in item["children"].values()]
 
         return item_data
 
 
-def collect(tests_dir_path: str) -> list[dict[str, Union[str, list[dict]]]]:
+def collect(tests_dir_path: str) -> list:
     """
     Collects the test via pytest at the given path.
 
-    NOTE: The pytest tests at the given path will be imported by the current process and the fixture will be setup.
+    NOTE: The pytest tests at the given path will be imported
+          by the current process and the fixture will be setup.
           This is so that if there's a repeated test for each of a fixture's outputs,
           that test will be collected as repeated.
 
